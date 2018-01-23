@@ -1,0 +1,196 @@
+import math
+import numpy as np
+from Particle3D import Particle3D
+import sys
+
+G = 1.0
+
+def force_dw(bodies, n):  ### to be tested (try some symmetric situaions) ### done ###
+    """
+    Method to define force on a body from other n-1 bodies (auxiliary
+    for next method)
+
+    :param bodies : list of Particle3D instances
+    :param n : index in bodies that labels body force acts on
+    :return: force acting on body n as array (floats)
+    """
+    force =  np.array([float(0) for x in xrange(0,3)]) # dummy force 
+    r = np.array([float(0) for x in xrange(0,3)])  # dummy separation 
+    modr = float(0)
+    for i in range(len(bodies)):
+        if i != n:
+            r= Particle3D.relative_pos(bodies[i],bodies[n])
+            modr = np.linalg.norm(r)
+            force = force + G*bodies[n].mass*bodies[i].mass/(modr**2)*r # if statement to avoid */0 (force exerted by itself)
+        elif n == i:
+            force = force
+            
+    return force
+
+def force_dw_tot(bodies):
+    """
+    Method to find total gravitational force on each body in a list 
+    and store force vectors in a list of arrays
+    
+    :param bodies: List of Particle3D instances
+    
+    """
+    forces =[np.array([float(0) for x in range(3)]) for y in range(len(bodies))] # dummy list of forces
+    for i in range(len(bodies)):
+        forces[i] = force_dw(bodies,i)
+
+    return forces
+
+def pot_energy_dw(body1, body2):  ### to be tested (all energy methods)###
+    """
+    Method to define total potential energy
+    of 2 bodies.
+
+    :param body1, body2 : Particle3D instances
+    :param G : gravitational constant (file)
+    :return: potential energy of the pair as a float
+    """
+    r = Particle3D.relative_pos(body1, body2)
+    modr = np.linalg.norm(r)
+    m1 = body1.mass
+    m2 = body2.mass
+    energy = G*m1*m2/modr
+    return energy
+
+def pot_energy_dw_tot(bodies):  
+    """
+    method to find total gravitational potential energy 
+    due to pairwise interactions of a set of bodies
+    
+    :param bodies: a list of Particle3D instances
+    :return : total potential energy as a float
+    """
+    energy = 0
+
+    for i in range(len(bodies)-1):
+        for j in xrange(i+1,len(bodies)):
+            energy = energy + pot_energy_dw(bodies[i],bodies[j])
+    return energy
+
+def kin_energy_dw_tot(bodies):
+    """
+    method to output total kinetic energy 
+    of a set of bodies
+    
+    :param bodies: list of Particle3D instances
+    """
+    T = 0
+    
+    for i in range(len(bodies)):
+        T = T + bodies[i].kinetic_energy()
+    
+    return T
+
+def energy_tot(bodies):
+    """
+    method to return total energy of a 
+    set of particles as a float
+
+    :param bodies: list of Particle3D instances
+    """
+    E = kin_energy_dw_tot(bodies) + pot_energy_dw_tot(bodies)
+
+    return E
+
+
+## main code ##
+def main():
+    
+   
+    infile_name = sys.argv[1]
+    
+    # Open output file
+    outfile = open("trajectory.xyz", "w")
+    infile = open(infile_name, "r")
+
+    
+    # set up simulation parameters
+    dt = 0.01
+    numsteps = 500
+    time =0.0
+    lines = infile.readlines()
+    
+ 
+    infile.close()
+
+    particles = [Particle3D.init_from_file(infile_name,1) for x in range(len(lines))]
+
+    ### bunch of tests ###
+    ##particles[3] = Particle3D.init_from_file(infile_name,3)
+    ##print("" + str(particles[3].position))                    ### tests
+    ##print("lines 5" +str(lines[3]))
+    ##print("length particles = " +str(len(particles)))
+    ##print("length lines = " +str(len(lines)))
+  
+    ## getting list of particles (list of arrays)
+
+    for i in range(len(particles)):
+        particles[i] = Particle3D.init_from_file(infile_name,i) ## this works well ##
+    ##print("" + str(particles[3].position)) ###
+    
+
+    ##test0 = force_dw(particles,0)
+    ##test1 = force_dw(particles,1)                  ### tests
+
+    ##print("on particle 1 = " +str(test0))
+    ##print("on particle 2 = " +str(test1))
+
+    ##forces =force_tot(particles)
+    ##print("" +str(forces[1]))
+
+    #initial conditions
+    force = force_dw_tot(particles)
+
+    energy = energy_tot(particles) # to be tested
+
+    outfile.write(str(len(particles)) + "\n" + "point = " + str(0) + "\n")
+    for j in range(len(particles)):
+        outfile.write(str(particles[j].xyz__str__()) + "\n")
+
+
+    # time integration loop
+
+    for i in range(numsteps):
+
+        #update positions list order 2
+        for j in range(len(particles)):
+            particles[j].leap_pos2nd(dt, force[j])
+            
+        # Update force list
+        force_new = force_dw_tot(particles)
+        
+        # Update particle velocity by averaging
+        # current and new forces
+        for j in range(len(particles)):
+            particles[j].leap_velocity(dt, 0.5*(force[j]+force_new[j]))
+            
+        # Re-define force value
+        for j in range(len(particles)):
+            force[j] = force_new[j]
+
+        # Increase time
+        time = time + dt
+        
+        # find energy (to be tested)
+        energy = energy_tot(particles)
+        outfile.write(str(len(particles)) + "\n" + "point = " + str(i+1) + "\n")
+        for j in range(len(particles)):
+            outfile.write(str(particles[j].xyz__str__()) + "\n" )
+        ##print("force on 0 = " +str(force[0]) + " force on 1 = " + str(force[1]))  ## forces make sense ##
+        ##print("position 1 = " +str(particles[0].position) + "position 2 = " +str(particles[1].position))
+
+        # Append information to data lists
+        ##time_list.append(time)
+        ##relpos_list.append(np.linalg.norm(Particle3D.relative_pos(p1,p2))) #list of scalar distances (for plotting ) not positions 
+        ##energy_list.append(energy)
+    #print("" +str(Particle3D.__str__(particles[1])))
+
+    outfile.close()
+        
+#execute main method
+main()
